@@ -4,6 +4,8 @@ import playsound
 import math
 import tkinter as tk
 from PIL import Image, ImageTk
+from plyer import notification
+import datetime
 
 
 # initializing mediapose and drawing utilities
@@ -46,12 +48,32 @@ initial_pose = None
 global initial_results
 initial_results = None
 
+global bad_posture_alert, bad_posture_notification, last_notification_time
+bad_posture_alert = True
+bad_posture_notification = True
+last_notification_time = datetime.datetime.now()
+
 
 ###############################################################################################################
 
 
 # creating a window
 root = tk.Tk()
+
+
+# function to send wrong posture notification
+def wrong_posture_notification():
+    # send notification if the current time is 1 second more than the last notification time
+    global last_notification_time
+    current_time = datetime.datetime.now()
+    if (current_time - last_notification_time).seconds >= 1:
+        notification.notify(
+            title="Posture Alert",
+            message="Please correct your posture!",
+            app_name="Posture Alert",
+            timeout=10
+        )
+        last_notification_time = current_time
 
 
 # function to calculate the normalized variation
@@ -206,8 +228,13 @@ def start_tracking():
                     if variation_x > threshold or variation_y > threshold or variation_z > int(threshold/10):
                         # update posture_info label to show that the posture is not ok with red enlarged text
                         posture_info.config(text="Posture not ok!", font=("Helvetica", 20), fg="red")
-                        playsound.playsound("beep-02.wav", False)
-                        break  # Only beep once per frame
+
+                        if bad_posture_notification:
+                            wrong_posture_notification()
+
+                        if bad_posture_alert:
+                            playsound.playsound("beep-02.wav", False)
+                            break  # Only beep once per frame
     
     start_tracking_identifier = live_feed.after(10, start_tracking)
 
@@ -215,6 +242,8 @@ def start_tracking():
 # user settings
 def user_settings():
     global threshold
+    global bad_posture_alert
+    global bad_posture_notification
     
     # open a new window to enter treshold value
     settings_window = tk.Toplevel(root)
@@ -227,13 +256,51 @@ def user_settings():
     threshold_entry_label.pack()
 
     threshold_entry = tk.Entry(settings_window)
+    threshold_entry.insert(0, threshold)
     threshold_entry.pack()
+
+    # add a horizontal line
+    tk.Label(settings_window, text="-------------------------------------------------------").pack()
+    
+    bad_posture_alert_var = tk.IntVar()
+    bad_posture_alert_checkbox = tk.Checkbutton(settings_window, text="Bad posture beep alert", variable=bad_posture_alert_var)
+    if bad_posture_alert:
+        bad_posture_alert_checkbox.select()
+    else:
+        bad_posture_alert_checkbox.deselect()
+    bad_posture_alert_checkbox.pack()
+
+    bad_posture_notification_var = tk.IntVar()
+    bad_posture_notification_checkbox = tk.Checkbutton(settings_window, text="Bad posture desktop notification", variable=bad_posture_notification_var)
+    if bad_posture_notification:
+        bad_posture_notification_checkbox.select()
+    else:
+        bad_posture_notification_checkbox.deselect()
+    bad_posture_notification_checkbox.pack()
+
+    tk.Label(settings_window, text="-------------------------------------------------------").pack()
+
+
 
     def save_settings():
         global threshold
+        global bad_posture_alert
+        global bad_posture_notification
+
         threshold = float(threshold_entry.get())
         # update the threshold label in the main window
         threshold_label.config(text=f"Threshold: {threshold}")
+
+        if bad_posture_alert_var.get() == 1:
+            bad_posture_alert = True
+        else:
+            bad_posture_alert = False
+
+        if bad_posture_notification_var.get() == 1:
+            bad_posture_notification = True
+        else:
+            bad_posture_notification = False
+
         settings_window.destroy()
     
     save_button = tk.Button(settings_window, text="Save", command=save_settings)
