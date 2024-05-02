@@ -6,6 +6,8 @@ import tkinter as tk
 from PIL import Image, ImageTk
 from plyer import notification
 import datetime
+import time
+import threading
 
 
 # initializing mediapose and drawing utilities
@@ -52,6 +54,11 @@ global bad_posture_alert, bad_posture_notification, last_notification_time
 bad_posture_alert = True
 bad_posture_notification = True
 last_notification_time = datetime.datetime.now()
+
+global timer_thread_var
+timer_thread_var= None
+global is_pomodoro_running
+is_pomodoro_running = False
 
 
 ###############################################################################################################
@@ -339,6 +346,115 @@ def reset_system():
     print("System reset!")
 
 
+# pomodoro feature implementation
+def promodoro_feature():
+    # create a new window for pomodoro feature
+    pomodoro_window = tk.Toplevel(root)
+    pomodoro_window.title("Pomodoro")
+
+    # label with info "keep this window open for pomodoro feature"
+    info_label = tk.Label(pomodoro_window, text="* Keep this window open for pomodoro feature")
+    info_label.pack()
+
+    # entry box to enter the time in minutes, also a label to show appropriate message
+    time_entry_label = tk.Label(pomodoro_window, text="Enter time in minutes :")
+    time_entry_label.pack()
+
+    time_entry = tk.Entry(pomodoro_window)
+    time_entry.insert(0, "25")
+    time_entry.pack()
+
+    break_time_label = tk.Label(pomodoro_window, text="Enter break duration in minutes :")
+    break_time_label.pack()
+
+    break_time_entry = tk.Entry(pomodoro_window)
+    break_time_entry.insert(0, "5")
+    break_time_entry.pack()
+
+    # label to show the timer value using tkinter StringVar
+    timer_var = tk.StringVar()
+    timer_label = tk.Label(pomodoro_window, textvariable=timer_var)
+    timer_label.config(font=("Helvetica", 20))
+    timer_label.pack()
+
+    # function to implement the timer
+    def start_pomodoro(timer_var, time_entry_value):
+        start_timer_button.config(state="disabled")
+        time_entry.config(state="disabled")
+        break_time_entry.config(state="disabled")
+        global is_pomodoro_running
+        is_pomodoro_running = True
+        # implement the timer in a separate thread so that the GUI does not freeze
+        def timer_thread(timer_var, time_entry_value):
+            # get the time in seconds
+            time_in_seconds = int(time_entry_value) * 60
+            while time_in_seconds > 0 and is_pomodoro_running:
+                min, secs = divmod(time_in_seconds, 60)
+                timer_var.set(f"{min} : {secs}")
+                time_in_seconds -= 1
+                time.sleep(1)
+            # show a notification when the timer is done
+            if is_pomodoro_running:
+                notification.notify(
+                    title="Time to take a break!",
+                    message="Time's up!",
+                    app_name="Pomodoro",
+                    timeout=10
+                )
+                playsound.playsound("beep-02.wav", False)
+            break_time_in_seconds = 10
+            if is_pomodoro_running:
+                break_time_in_seconds = int(break_time_entry.get())*60
+            while break_time_in_seconds > 0 and is_pomodoro_running:
+                min, secs = divmod(break_time_in_seconds, 60)
+                timer_var.set(f"Break: {min} : {secs}")
+                break_time_in_seconds -= 1
+                time.sleep(1)
+            if is_pomodoro_running:
+                notification.notify(
+                    title="Break time over!",
+                    message="Get back to work!",
+                    app_name="Pomodoro",
+                    timeout=10
+                )
+                playsound.playsound("beep-02.wav", False)
+                timer_var.set("")
+                timer_thread(timer_var, time_entry_value)
+
+            
+
+        # start the timer thread
+        global timer_thread_var
+        timer_thread_var = threading.Thread(target=timer_thread, args=(timer_var, time_entry_value))
+        timer_thread_var.start()
+            
+    # start button to start the timer
+    start_timer_button = tk.Button(pomodoro_window, text="Start Timer", command=lambda: start_pomodoro(timer_var, time_entry.get()))
+    start_timer_button.pack()
+
+    # reset button
+    def reset_pomodoro():
+        global timer_thread_var
+        print(timer_thread_var)
+        global is_pomodoro_running
+        is_pomodoro_running = False
+        if timer_thread_var:
+            # timer_thread_var.terminate()
+            timer_thread_var.join()
+            timer_thread_var = None
+        timer_var.set("")
+        start_timer_button.config(state="normal")
+        time_entry.config(state="normal")
+        break_time_entry.config(state="normal")
+
+
+    
+    reset_timer_button = tk.Button(pomodoro_window, text="Reset", command=reset_pomodoro)
+    reset_timer_button.pack()
+
+
+
+
 
 # label to show the live feed
 live_feed = tk.Label(root)
@@ -373,6 +489,11 @@ reset_button.pack()
 # posture info label
 posture_info = tk.Label(root, text="")
 posture_info.pack()
+
+
+# pomodoro button
+pomodoro_button = tk.Button(root, text="Pomodoro", command=promodoro_feature)
+pomodoro_button.pack()
 
 
 cap = cv2.VideoCapture(0)
