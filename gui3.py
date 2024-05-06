@@ -32,7 +32,7 @@ success = None
 img = None
 
 global threshold
-threshold = 0.075
+threshold = 0.09
 
 global simple_live_feed_identifier
 simple_live_feed_identifier = None
@@ -66,6 +66,7 @@ is_pomodoro_running = False
 
 # creating a window
 root = tk.Tk()
+root.title("Posture Perfect")
 
 
 # function to send wrong posture notification
@@ -73,7 +74,7 @@ def wrong_posture_notification():
     # send notification if the current time is 1 second more than the last notification time
     global last_notification_time
     current_time = datetime.datetime.now()
-    if (current_time - last_notification_time).seconds >= 1:
+    if (current_time - last_notification_time).seconds >= 3:
         notification.notify(
             title="Posture Alert",
             message="Please correct your posture!",
@@ -176,6 +177,9 @@ def set_ideal_posture():
             start_button.config(state="normal")
 
         print("Initial posture captured!")
+
+        current_status_label.config(text="Posture set! Click on 'Track Posture' to start tracking .")
+
         live_feed_with_ideal_posture()
 
 
@@ -200,6 +204,8 @@ def start_tracking():
     
     set_posture_button.config(state="disabled")
     start_button.config(state="disabled")
+    pause_button.config(state="normal")
+    current_status_label.config(text="Posture Tracking is Live!")
 
     success, img = cap.read()
     
@@ -244,6 +250,19 @@ def start_tracking():
                             break  # Only beep once per frame
     
     start_tracking_identifier = live_feed.after(10, start_tracking)
+
+
+# function to pause tracking
+def pause_tracking():
+    global start_tracking_identifier
+    if start_tracking_identifier:
+        live_feed.after_cancel(start_tracking_identifier)
+        start_tracking_identifier = None
+    pause_button.config(state="disabled")
+    start_button.config(state="normal")
+    set_posture_button.config(state="disable")
+    current_status_label.config(text="Posture Tracking is paused")
+    live_feed_with_ideal_posture()
 
 
 # user settings
@@ -340,6 +359,7 @@ def reset_system():
     start_button.config(state="disabled")
     set_posture_button.config(state="normal")
     posture_info.config(text="")
+    current_status_label.config(text="* Set the ideal initial posture")
 
     simple_live_feed()
 
@@ -356,6 +376,8 @@ def promodoro_feature():
     info_label = tk.Label(pomodoro_window, text="* Keep this window open for pomodoro feature")
     info_label.pack()
 
+    tk.Label(pomodoro_window, text="-------------------------------").pack()
+
     # entry box to enter the time in minutes, also a label to show appropriate message
     time_entry_label = tk.Label(pomodoro_window, text="Enter time in minutes :")
     time_entry_label.pack()
@@ -371,11 +393,23 @@ def promodoro_feature():
     break_time_entry.insert(0, "5")
     break_time_entry.pack()
 
+    repeat_var = tk.IntVar()
+    repeat_var.set(1)
+    repeat_checkbox = tk.Checkbutton(pomodoro_window, text="Repeat Pomodoro Cycles", variable=repeat_var)
+    if repeat_var.get() == 1:
+        repeat_checkbox.select()
+    repeat_checkbox.pack()
+
+    tk.Label(pomodoro_window, text="-------------------------------").pack()
+
     # label to show the timer value using tkinter StringVar
     timer_var = tk.StringVar()
     timer_label = tk.Label(pomodoro_window, textvariable=timer_var)
     timer_label.config(font=("Helvetica", 20))
     timer_label.pack()
+
+    tk.Label(pomodoro_window, text="-------------------------------").pack()
+
 
     # function to implement the timer
     def start_pomodoro(timer_var, time_entry_value):
@@ -401,7 +435,7 @@ def promodoro_feature():
                     app_name="Pomodoro",
                     timeout=10
                 )
-                playsound.playsound("beep-02.wav", False)
+                playsound.playsound("pomodoro_timer.mp3", False)
             break_time_in_seconds = 10
             if is_pomodoro_running:
                 break_time_in_seconds = int(break_time_entry.get())*60
@@ -417,10 +451,15 @@ def promodoro_feature():
                     app_name="Pomodoro",
                     timeout=10
                 )
-                playsound.playsound("beep-02.wav", False)
+                playsound.playsound("pomodoro_timer.mp3", False)
                 timer_var.set("")
-                timer_thread(timer_var, time_entry_value)
-
+                if repeat_var.get() == 1:
+                    # start_pomodoro(timer_var, time_entry_value)
+                    timer_thread(timer_var, time_entry_value)
+                else:
+                    start_timer_button.config(state="normal")
+                    time_entry.config(state="normal")
+                    break_time_entry.config(state="normal")
             
 
         # start the timer thread
@@ -453,47 +492,93 @@ def promodoro_feature():
     reset_timer_button.pack()
 
 
+# help window 
+def help_window():
+    help_window = tk.Toplevel(root)
+    help_window.title("Help")
+
+    help_text = """
+    This is a posture tracking system that tracks the posture of a person in real-time.
+    The system uses the webcam feed to track the posture of the person and alerts the user 
+    if the posture is not correct.
+
+    The system has the following features:
+
+
+    1. Set Initial Posture: Click on this button to set the ideal initial posture. 
+       You can set the ideal posture multiple times till you get it right. 
+       The green nodes shows the ideal posture.
+    2. Track Posture: Click on this button to start tracking the posture. 
+       The red nodes show the current posture. 
+       If the current posture is not within the threshold range of the ideal posture, the 
+       system will alert the user.
+    3. Pause Tracking: Click on this button to pause the tracking.
+    4. Settings: Click on this button to change the threshold value and enable/disable beep alert 
+       and desktop notification.
+    5. Reset: Click on this button to reset the system and start again.
+    6. Pomodoro: Click on this button to use the Pomodoro technique for productivity.
+    7. Help: Click on this button to get help about the system.
+    """
+    help_label = tk.Label(help_window, text=help_text)
+    # left align each line
+    help_label.config(justify="left")
+    help_label.pack()
+
+
 
 
 
 # label to show the live feed
 live_feed = tk.Label(root)
-live_feed.pack()
+live_feed.grid(row=0, column=0, columnspan=3)
 
 
 # set posture button
-set_posture_button = tk.Button(root, text="Set Posture", command=set_ideal_posture)
-set_posture_button.pack()
+set_posture_button = tk.Button(root, text="Set Initial Posture", command=set_ideal_posture)
+set_posture_button.grid(row=1, column=0)
 
 
 # start button
-start_button = tk.Button(root, text="Start", state="disabled", command=start_tracking)
-start_button.pack()
+start_button = tk.Button(root, text="Track Posture", state="disabled", command=start_tracking)
+start_button.grid(row=1, column=2)
+
+# pause tracking button
+pause_button = tk.Button(root, text="Pause Tracking", state="disabled", command=pause_tracking)
+pause_button.grid(row=2, column=2)
 
 
 # settings button
 settings_button = tk.Button(root, text="Settings", command=user_settings)
-settings_button.pack()
+settings_button.grid(row=1, column=1)
 
 
 # treshold value label
 threshold_label = tk.Label(root, text=f"Threshold: {threshold}")
-threshold_label.pack()
+threshold_label.grid(row=2, column=1)
 
 
 # reset button
 reset_button = tk.Button(root, text="Reset", command=reset_system)
-reset_button.pack()
+reset_button.grid(row=3, column=2)
 
 
 # posture info label
 posture_info = tk.Label(root, text="")
-posture_info.pack()
+posture_info.grid(row=5, column=0, columnspan=3)
+
+# current status label
+current_status_label = tk.Label(root, text="* Set the ideal initial posture")
+current_status_label.grid(row=4, column=0, columnspan=3)
 
 
 # pomodoro button
 pomodoro_button = tk.Button(root, text="Pomodoro", command=promodoro_feature)
-pomodoro_button.pack()
+pomodoro_button.grid(row=2, column=0)
+
+
+# help button
+help_button = tk.Button(root, text="Help", command=help_window)
+help_button.grid(row=3, column=1)
 
 
 cap = cv2.VideoCapture(0)
